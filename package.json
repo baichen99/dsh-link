@@ -1,0 +1,50 @@
+{
+  "name": "dsh-agentlink",
+  "version": "0.1.0",
+  "description": "AgentLink remote access for DeepSeek Harness",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:baichen99/dsh-agentlink",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./dist/client.js",
+    "./browser": "./src/browser.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "dist",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.js",
+    "prepack": "npm run build",
+    "prepare": "npm run build"
+  },
+  "engines": {
+    "node": ">=22.19"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-web-frontend": "0.1.6-alpha.2",
+    "esbuild": "^0.25.0"
+  }
+}
