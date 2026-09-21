@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
+import { readFile } from 'node:fs/promises';
 import { randomBytes, createDecipheriv, hkdfSync } from 'node:crypto';
 import WebSocket, { WebSocketServer } from 'ws';
 import { connectHost } from '../src/host-tunnel.js';
@@ -37,7 +38,13 @@ test('encrypted fetch, large binary bodies, stream consumption/cancel and discon
   const server = createServer();
   const wss = new WebSocketServer({ server });
   const browsers = new Map();
-  let daemon;
+  let daemon, relayDelay = 0, relayedBytes = 0;
+  const relay = (socket, value) => {
+    relayedBytes += Buffer.byteLength(value);
+    if (relayDelay) setTimeout(() => { if (socket?.readyState === 1) socket.send(value); }, relayDelay);
+    else socket?.send(value);
+  };
+  const boot = await readFile(new URL('../dist/viewer.js', import.meta.url), 'utf8');
   wss.on('connection', (ws, req) => {
     if (req.url.startsWith('/daemon-tunnel')) {
       daemon = ws;
@@ -45,13 +52,13 @@ test('encrypted fetch, large binary bodies, stream consumption/cancel and discon
         const text = raw.toString();
         if (text.startsWith('{')) return;
         const split = text.indexOf(' ');
-        browsers.get(text.slice(0, split))?.send(text.slice(split + 1));
+        relay(browsers.get(text.slice(0, split)), text.slice(split + 1));
       });
     } else {
       const id = crypto.randomUUID();
       browsers.set(id, ws);
       daemon.send(JSON.stringify({ type: 'tunnel_attach', tunnelId: id }));
-      ws.on('message', raw => daemon.send(`${id} ${raw.toString()}`));
+      ws.on('message', raw => relay(daemon, `${id} ${raw.toString()}`));
       ws.on('close', () => { browsers.delete(id); if (daemon.readyState === 1) daemon.send(JSON.stringify({ type: 'tunnel_close', tunnelId: id })); });
     }
   });
@@ -65,7 +72,9 @@ test('encrypted fetch, large binary bodies, stream consumption/cancel and discon
   const cancellation = new Promise(resolve => { cancelled = resolve; });
   const stop = connectHost({ hub, authToken: 'test-machine', enckey,
     onStatus: state => { if (state === 'connected') online(); }, onRevoked() {}, onRecover() {},
-    fetch: async request => request.method === 'POST'
+    fetch: async request => new URL(request.url).pathname === '/agentlink/bootstrap'
+      ? new Response(boot, { headers: { 'content-type': 'text/html; charset=utf-8' } })
+      : request.method === 'POST'
       ? new Response(await request.arrayBuffer(), { headers: { 'content-type': 'application/octet-stream' } })
       : new Response('真实响应 ✓'),
     async *openStream(endpoint, payload, signal) {
@@ -92,6 +101,12 @@ test('encrypted fetch, large binary bodies, stream consumption/cancel and discon
   await stream.return();
   await cancellation;
   await assert.rejects(client.fetch('/api/agentlink/login'), /local only/);
+  relayDelay = 30; relayedBytes = 0;
+  const started = performance.now();
+  assert.equal(await (await client.fetch('/agentlink/bootstrap')).text(), boot);
+  const elapsed = performance.now() - started;
+  assert.ok(elapsed < 3000, `Native boot took ${Math.round(elapsed)} ms over a 60 ms relay RTT`);
+  assert.ok(relayedBytes < Buffer.byteLength(boot), 'Native UI must be compressed before encrypted transport');
   client.close();
   await assert.rejects(client.fetch('/api/hello'), /关闭|断开/);
 });

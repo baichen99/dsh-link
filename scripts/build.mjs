@@ -18,4 +18,4 @@ await build({
 });
 const client = await build({ entryPoints: ['src/client.js'], bundle: true, format: 'cjs', external: ['react'], write: false });
 await writeFile('dist/client.js', `window.__ModuleLoader__.load({id:"dsh-agentlink",factory(require){const module={exports:{}};const exports=module.exports;\n${client.outputFiles[0].text}\nreturn module.exports;}});\n`);
-await build({ entryPoints: ['src/browser.js'], bundle: true, format: 'esm', outfile: 'dist/browser.js', banner: { js: '// Generated from baichen99/dsh-link 0.1.0 (MIT). See source repository; do not edit.' } });
+await build({ entryPoints: ['src/browser.js'], bundle: true, format: 'esm', outfile: 'dist/browser.js', banner: { js: '// Generated from baichen99/dsh-link 0.1.1 (MIT). See source repository; do not edit.' } });

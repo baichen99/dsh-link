@@ -18,7 +18,7 @@ export async function apply(ctx, config = {}) {
         const injections = ctx.webServer.renderIndex('<!doctype html><html><head></head><body></body></html>');
         const data = JSON.stringify(injections).replaceAll('<', '\\u003c');
         const csp = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob:; style-src 'unsafe-inline'; img-src blob: data:; font-src data: blob:; media-src blob:; connect-src 'none'; base-uri 'none'; form-action 'none'";
-        return new Response(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${csp}"><style>${css.replaceAll('</style', '<\\/style')}</style></head><body><div id="root"></div><script id="dsh-injections" type="application/json">${data}</script><script>${script}</script></body></html>`, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+        return new Response(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${csp}"><style>${css.replaceAll('</style', '<\\/style')}</style></head><body><div id="root"></div><script id="dsh-injections" type="application/json">${data}</script><script>${script}</script></body></html>`, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-dsh-viewer-ready': '1' } });
       }
       if (path.startsWith('/plugins/')) return ctx.clientModules.fetchBundle(request);
       return shared.fetch(request);

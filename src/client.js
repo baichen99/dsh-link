@@ -4,6 +4,27 @@ export const inject = ['slots', 'connection'];
 const h = React.createElement;
 const labels = { 'signed-out': '尚未绑定', authorizing: '等待网页授权', binding: '正在保存绑定', connecting: '正在连接', connected: '已连接', reconnecting: '正在重连', disconnected: '已断开', revoked: '绑定已撤销', error: '连接失败' };
 
+const styles = `
+.dsh-agentlink { display:flex; flex-direction:column; align-self:flex-start; gap:20px; width:100%; height:fit-content; box-sizing:border-box; padding:12px 0; color:var(--dsw-alias-label-primary, #18181b); font-family:inherit; font-size:14px; line-height:1.6; }
+.dsh-agentlink h2,.dsh-agentlink p,.dsh-agentlink dl,.dsh-agentlink dd { margin:0; }
+.dsh-agentlink h2 { font-size:16px; font-weight:500; line-height:24px; }
+.dsh-agentlink p { font-size:13px; line-height:1.6; color:var(--dsw-alias-label-secondary, #71717a); }
+.dsh-agentlink header { display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
+.dsh-agentlink .al-status { display:inline-flex; align-items:center; gap:6px; margin-left:auto; font-size:12px; color:inherit; }
+.dsh-agentlink .al-status::before { content:''; width:6px; height:6px; border-radius:50%; background:currentColor; opacity:.45; }
+.dsh-agentlink .al-status[data-connected=true]::before { background:#269768; opacity:1; }
+.dsh-agentlink dl { display:grid; grid-template-columns:72px minmax(0,1fr); align-items:baseline; gap:10px 16px; padding:16px 0; border-block:1px solid var(--dsw-alias-border-default, #e5e7eb); font-size:13px; }
+.dsh-agentlink dt { color:var(--dsw-alias-label-secondary, #71717a); }
+.dsh-agentlink dd { overflow-wrap:anywhere; }
+.dsh-agentlink .al-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.dsh-agentlink button,.dsh-agentlink a { display:inline-flex; align-items:center; justify-content:center; min-height:36px; box-sizing:border-box; padding:6px 14px; border:1px solid var(--dsw-alias-border-default, #e5e7eb); border-radius:10px; background:transparent; color:inherit; font:inherit; font-size:13px; line-height:22px; text-decoration:none; cursor:pointer; }
+.dsh-agentlink .al-primary { background:var(--dsw-alias-label-primary, #18181b); color:var(--dsw-alias-bg-layer-2, #fff); border-color:transparent; }
+.dsh-agentlink button:disabled { opacity:.5; cursor:wait; }
+.dsh-agentlink :is(button,a):hover { opacity:.8; }
+.dsh-agentlink :is(button,a):focus-visible { outline:2px solid currentColor; outline-offset:3px; }
+.dsh-agentlink [role=alert] { color:#c2413b; }
+`;
+
 export function apply(ctx) {
   // The local authenticated connection owns management; the remote adapter
   // denies these endpoints even if a remote client forges the UI flag.
@@ -33,19 +54,20 @@ export function apply(ctx) {
       catch (error) { setError(error.message); }
       finally { setBusy(false); }
     }
-    const button = (label, method) => h('button', { key: method, type: 'button', disabled: busy, onClick: () => void action(method), style: { padding: '8px 14px', border: '1px solid currentColor', borderRadius: 6, cursor: busy ? 'wait' : 'pointer', background: 'transparent', color: 'inherit' } }, label);
-    return h('section', { style: { maxWidth: 640, padding: 20, display: 'grid', gap: 16 } },
-      h('h2', { style: { fontSize: 22, fontWeight: 600 } }, 'AgentLink'),
-      h('p', null, '登录并绑定此 DSH，即可从 AgentLink 网页继续会话和处理审批。'),
-      h('p', { role: 'status', 'aria-live': 'polite' }, labels[status?.state] ?? '正在读取状态…'),
-      status && h('dl', null, h('dt', null, '当前实例'), h('dd', null, status.name), h('dt', null, '服务地址'), h('dd', { style: { overflowWrap: 'anywhere' } }, status.hub)),
+    const button = (label, method, primary = false) => h('button', { key: method, type: 'button', disabled: busy, onClick: () => void action(method), className: primary ? 'al-primary' : undefined }, label);
+    return h('section', { className: 'dsh-agentlink' },
+      h('style', null, styles),
+      h('header', null, h('h2', null, 'AgentLink'), h('span', { className: 'al-status', role: 'status', 'aria-live': 'polite', 'data-connected': status?.state === 'connected' }, labels[status?.state] ?? '正在读取…')),
+      h('p', null, '绑定后，可从其他电脑或手机的浏览器访问此 DSH。'),
+      status && h('dl', null, h('dt', null, '当前实例'), h('dd', null, status.name), h('dt', null, '服务地址'), h('dd', null, status.hub)),
       (error || status?.error) && h('p', { role: 'alert' }, error || status.error),
-      h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12 } },
-        status?.machineId ? [button('重新连接', 'reconnect'), button('解绑此实例', 'logout'), h('a', { key: 'web', href: `${status.hub}/machines`, target: '_blank', rel: 'noopener noreferrer' }, '打开 AgentLink Web')]
-          : button(busy ? '正在准备…' : '登录 AgentLink', 'login'),
-        status?.loginUrl && h('a', { href: status.loginUrl, target: '_blank', rel: 'noopener noreferrer', style: { textDecoration: 'underline' } }, '前往 AgentLink 授权'),
+      h('div', { className: 'al-actions' },
+        status?.machineId ? [h('a', { key: 'web', className: 'al-primary', href: `${status.hub}/machines`, target: '_blank', rel: 'noopener noreferrer' }, '打开 AgentLink Web'), button('重新连接', 'reconnect'), button('解绑此实例', 'logout')]
+          : !status?.loginUrl && button(busy ? '正在准备…' : '登录 AgentLink', 'login', true),
+        status?.loginUrl && h('a', { className: 'al-primary', href: status.loginUrl, target: '_blank', rel: 'noopener noreferrer' }, '前往 AgentLink 授权'),
         status?.state === 'authorizing' && button('取消登录', 'cancel')),
-      h('p', { style: { fontSize: 12, opacity: 0.7 } }, '授权在 AgentLink 页面完成。解绑会停止此实例的远程访问。'));
+      h('p', null, status?.machineId ? '请保持 DSH 运行。解绑后，此实例将停止远程访问。' : '在 AgentLink 网页登录账号并确认绑定。'));
+
   }
   ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'agentlink', label: 'AgentLink', order: 80 }, AgentLink));
 }

@@ -31,7 +31,7 @@ npm ci
 npm pack
 ```
 
-`npm ci` 会自动构建插件；`npm pack` 生成 `dsh-agentlink-0.1.0.tgz`，包含原生界面和运行时所需文件。
+`npm ci` 会自动构建插件；`npm pack` 生成 `dsh-agentlink-0.1.1.tgz`，包含原生界面和运行时所需文件。
 
 ### 3. 安装到 DSH
 
@@ -40,14 +40,14 @@ npm pack
 **macOS / Linux：**
 
 ```sh
-dsh plugin --profile web add "$(pwd)/dsh-agentlink-0.1.0.tgz"
+dsh plugin --profile web add "$(pwd)/dsh-agentlink-0.1.1.tgz"
 dsh web
 ```
 
 **Windows PowerShell：**
 
 ```powershell
-dsh plugin --profile web add "$((Get-Location).Path)/dsh-agentlink-0.1.0.tgz"
+dsh plugin --profile web add "$((Get-Location).Path)/dsh-agentlink-0.1.1.tgz"
 dsh web
 ```
 
@@ -84,6 +84,12 @@ dsh web
 - 在本机 **设置 → AgentLink → 解绑此实例**，会停止远程访问并移除账号中的绑定。
 - 也可以在 AgentLink Web 的机器列表移除实例。
 - 解绑遇到网络错误时，插件会保留本地凭证供重试；请在恢复网络后再次解绑。
+
+## 0.1.1 修复
+
+- 设置页使用 DSH 主题颜色与紧凑布局。
+- 启动页面和原生插件资源在加密前压缩，减少远程首次加载耗时；新 Web 显示连接、下载和插件启动阶段，启动超时会给出错误。
+- 托管 Hub 已补充浏览器连接心跳，修复空闲时可能出现的 `1006` 断线。自托管用户需要同步更新 AgentLink Hub/Web。
 
 ## 更新与卸载
 

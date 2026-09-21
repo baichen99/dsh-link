@@ -1,6 +1,6 @@
 {
   "name": "dsh-agentlink",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AgentLink remote access for DeepSeek Harness",
   "type": "module",
   "license": "MIT",

@@ -1,5 +1,7 @@
 import WebSocket from 'ws';
 import { randomBytes } from 'node:crypto';
+import { Readable } from 'node:stream';
+import { createGzip } from 'node:zlib';
 import { CHUNK_BYTES, MAX_BODY_BYTES, base64, unbase64, encryptionKey, peer, targetPath } from './wire.js';
 
 export function connectHost({ hub, authToken, enckey, fetch: dispatch, openStream, onStatus, onRevoked, onRecover }) {
@@ -26,7 +28,7 @@ export function connectHost({ hub, authToken, enckey, fetch: dispatch, openStrea
     });
     ws.on('open', () => {
       attempt = 0;
-      void send(JSON.stringify({ type: 'register', daemonVersion: 'dsh-agentlink/0.1.0', runtime: 'dsh' })).catch(() => ws.close());
+      void send(JSON.stringify({ type: 'register', daemonVersion: 'dsh-agentlink/0.1.1', runtime: 'dsh' })).catch(() => ws.close());
       onStatus('connected');
     });
     ws.on('error', () => onStatus('reconnecting'));
@@ -116,9 +118,10 @@ export function connectHost({ hub, authToken, enckey, fetch: dispatch, openStrea
           const headers = new Headers(message.headers);
           for (const name of [...headers.keys()]) if (!['content-type', 'accept', 'range'].includes(name)) headers.delete(name);
           const response = await dispatch(new Request(`http://dsh.internal${message.path}`, { method: message.method, headers, body, signal: controller.signal }));
-          await tunnel.channel.send({ id, type: 'headers', status: response.status, headers: [...response.headers].filter(([name]) => !['set-cookie', 'content-length', 'content-encoding'].includes(name)) });
+          const gzip = message.compression === 'gzip' && response.body && /^(?:text\/|application\/(?:javascript|json))/.test(response.headers.get('content-type') ?? '');
+          await tunnel.channel.send({ id, type: 'headers', encoding: gzip ? 'gzip' : undefined, status: response.status, headers: [...response.headers].filter(([name]) => !['set-cookie', 'content-length', 'content-encoding'].includes(name)) });
           if (response.body) {
-            const reader = response.body.getReader();
+            const reader = (gzip ? Readable.toWeb(Readable.fromWeb(response.body).compose(createGzip({ chunkSize: CHUNK_BYTES }))) : response.body).getReader();
             const cancel = () => { void reader.cancel().catch(() => {}); };
             controller.signal.addEventListener('abort', cancel, { once: true });
             try {

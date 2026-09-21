@@ -142,8 +142,17 @@ try {
       document.head.append(copy);
     }
   }
+  const root = document.getElementById('root');
+  const started = new MutationObserver(() => {
+    if (root.childElementCount && !root.querySelector('[data-dsh-boot]')) {
+      started.disconnect();
+      port.postMessage({ type: 'viewer-ready' });
+    }
+  });
+  started.observe(root, { childList: true, subtree: true });
   await import('__DSH_NATIVE_ENTRY__');
 } catch (error) {
+  port.postMessage({ type: 'viewer-error' });
   console.error('DSH native boot failed', error);
   document.getElementById('root').textContent = 'DSH 界面加载失败，请返回机器列表重新连接。';
 }

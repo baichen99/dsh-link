@@ -73,7 +73,8 @@ export async function connectBrowser({ hub, machineId, enckey, onClose = () => {
             pull() { if (pending) { pending = false; void send({ id, type: 'ack' }).catch(() => {}); } },
             cancel() { abort(); },
           }, { highWaterMark: 0 });
-          resolveHeaders(new Response([101, 204, 205, 304].includes(message.status) || method === 'HEAD' ? null : stream, { status: message.status, headers: message.headers }));
+          const body = message.encoding === 'gzip' ? stream.pipeThrough(new DecompressionStream('gzip')) : stream;
+          resolveHeaders(new Response([101, 204, 205, 304].includes(message.status) || method === 'HEAD' ? null : body, { status: message.status, headers: message.headers }));
         } else if (message.type === 'chunk') {
           const bytes = unbase64(message.data);
           if (bytes.length > CHUNK_BYTES) throw new Error('Oversized DSH chunk');
@@ -106,7 +107,7 @@ export async function connectBrowser({ hub, machineId, enckey, onClose = () => {
       finally { clearTimeout(timeout); }
     }
     try {
-      await upload({ type: 'request', path, method, headers });
+      await upload({ type: 'request', path, method, headers, compression: typeof DecompressionStream === 'function' ? 'gzip' : undefined });
       for (let i = 0; i < body.length; i += CHUNK_BYTES) await upload({ type: 'body', data: base64(body.subarray(i, i + CHUNK_BYTES)) });
       await send({ id, type: 'end' });
     } catch (cause) { state.fail(cause); void send({ id, type: 'cancel' }).catch(() => {}); throw cause; }
@@ -148,7 +149,15 @@ export async function connectBrowser({ hub, machineId, enckey, onClose = () => {
 // Only this parent-side adapter handles keys. The opaque iframe receives a
 // MessagePort exposing the already-authenticated DSH carrier, never account APIs.
 export async function mountViewer(iframe, options) {
+  options.onProgress?.('正在连接 DSH…');
   const transport = await connectBrowser(options);
+  let finishBoot;
+  const booted = new Promise((resolve, reject) => { finishBoot = { resolve, reject }; });
+  void booted.catch(() => {});
+  const bootTimer = setTimeout(() => {
+    finishBoot.reject(new Error('DSH 启动超时，请确认本机 DSH 可正常打开，再重新连接。'));
+    dispose();
+  }, 60_000);
   const controller = new AbortController();
   const active = new Map();
   const ports = new MessageChannel();
@@ -156,6 +165,8 @@ export async function mountViewer(iframe, options) {
   const dispose = () => {
     if (stopped) return;
     stopped = true;
+    clearTimeout(bootTimer);
+    finishBoot.reject(new Error('DSH 连接已取消。'));
     controller.abort();
     for (const request of active.values()) request.controller.abort();
     active.clear();
@@ -166,6 +177,8 @@ export async function mountViewer(iframe, options) {
   options.signal?.addEventListener('abort', dispose, { once: true });
   ports.port1.onmessage = async ({ data }) => {
     const { id, type } = data ?? {};
+    if (type === 'viewer-ready') { clearTimeout(bootTimer); finishBoot.resolve(); return; }
+    if (type === 'viewer-error') { finishBoot.reject(new Error('DSH 原生插件启动失败，请检查本机 DSH 后重新连接。')); return; }
     if (typeof id !== 'string' || !/^[\w-]{1,64}$/.test(id)) return;
     if (type === 'cancel') { active.get(id)?.controller.abort(); return; }
     if (type === 'ack') { active.get(id)?.ack?.(); return; }
@@ -199,6 +212,8 @@ export async function mountViewer(iframe, options) {
     finally { active.delete(id); state.controller.abort(); }
   };
   try {
+    options.signal?.throwIfAborted();
+    options.onProgress?.('正在下载 DSH 界面…');
     const response = await transport.fetch('/agentlink/bootstrap', { signal: controller.signal });
     if (!response.ok) throw new Error('无法加载 DSH 界面。');
     let html;
@@ -209,7 +224,10 @@ export async function mountViewer(iframe, options) {
     iframe.referrerPolicy = 'no-referrer';
     const load = () => { if (!stopped) iframe.contentWindow.postMessage({ type: 'dsh-agentlink-start', html }, '*', [ports.port2]); };
     iframe.addEventListener('load', load, { once: true });
+    options.onProgress?.('正在启动 DSH 插件…');
     iframe.src = new URL('/api/dsh/frame', options.hub).toString();
+    if (response.headers.get('x-dsh-viewer-ready') === '1') await booted;
+    else clearTimeout(bootTimer); // Older plugins have no ready notification.
     return () => { iframe.removeEventListener('load', load); options.signal?.removeEventListener('abort', dispose); dispose(); };
   } catch (error) { dispose(); throw error; }
 }
