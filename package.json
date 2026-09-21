@@ -4,7 +4,7 @@
   "description": "AgentLink remote access for DeepSeek Harness",
   "type": "module",
   "license": "MIT",
-  "repository": "github:baichen99/dsh-agentlink",
+  "repository": "github:baichen99/dsh-link",
   "exports": {
     ".": "./src/index.js",
     "./client": "./dist/client.js",
